@@ -119,7 +119,9 @@ def parse_args():
     parser.set_defaults(with_cuda=True)
     parser.set_defaults(with_opengl=True)
     # parser.set_defaults(with_opengl=False)
-    parser.set_defaults(with_tests=True)
+    # GCC 11+: test compilation errors (e.g. threading_test.cc missing
+    # std::this_thread::sleep_for). Disable tests by default.
+    parser.set_defaults(with_tests=False)
     parser.set_defaults(ssl_verification=True)
 
     args = parser.parse_args()
@@ -271,26 +273,16 @@ def build_freeimage(args):
                         line = "FreeImage: $(STATICLIB)"
                     print(line, end="")
         elif PLATFORM_IS_LINUX:
-            pass
-
-            # with fileinput.FileInput(
-            #         os.path.join(path, "Source/LibWebP/src/dsp/"
-            #                      "dsp.upsampling_mips_dsp_r2.c"),
-            #         inplace=True, backup=".bak") as fid:
-            #     for i, line in enumerate(fid):
-            #         if i >= 36 and i <= 44:
-            #             line = line.replace("%[\"", "%[\" ")
-            #             line = line.replace("\"],", " \"],")
-            #         print(line, end="")
-            # with fileinput.FileInput(
-            #         os.path.join(path, "Source/LibWebP/src/dsp/"
-            #                      "dsp.yuv_mips_dsp_r2.c"),
-            #         inplace=True, backup=".bak") as fid:
-            #     for i, line in enumerate(fid):
-            #         if i >= 56 and i <= 58:
-            #             line = line.replace("\"#", "\"# ")
-            #             line = line.replace("\"(%", " \"(%")
-            #         print(line, end="")
+            # GCC 11+ defaults to C++17 where OpenEXR's throw() dynamic
+            # exception specifications are ill-formed. Force C++14 for
+            # FreeImage to work around this.
+            with fileinput.FileInput(os.path.join(path, "Makefile.gnu"),
+                                     inplace=True, backup=".bak") as fid:
+                for line in fid:
+                    if line.startswith("CXXFLAGS ?= "):
+                        line = line.replace("CXXFLAGS ?= ",
+                                            "CXXFLAGS ?= -std=c++14 ")
+                    print(line, end="")
 
         subprocess.call(["make", "-f", "Makefile.gnu",
                          "-j{}".format(multiprocessing.cpu_count())], cwd=path)
@@ -350,7 +342,14 @@ def build_glog(args):
                      "454766d0124951091c95bad33dafeacd")
     shutil.move(os.path.join(args.build_path, "glog-0.3.5"), path)
 
-    build_cmake_project(args, os.path.join(path, "__build__"))
+    # GCC 11+ / C++17: glog test code uses throw(std::bad_alloc) which is
+    # removed in C++17. Disable tests to avoid compilation errors.
+    extra_config_args = [
+        "-DBUILD_TESTING=OFF",
+    ]
+
+    build_cmake_project(args, os.path.join(path, "__build__"),
+                        extra_config_args=extra_config_args)
 
 
 def build_suite_sparse(args):

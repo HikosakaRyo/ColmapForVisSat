@@ -89,7 +89,7 @@ static union { vl_uint64 raw ; double value ; }
 #define VL_NAN_D (vl_nan_d.value)
 
 /** @brief IEEE double precision positive infinity (not signaling) */
-#define VL_INFINITY_D (vl_infinity_d.value)
+#define VL_INFINITY_D (__builtin_huge_val())
 
 /* ---------------------------------------------------------------- */
 
