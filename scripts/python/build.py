@@ -188,7 +188,28 @@ def check_md5_hash(path, md5_hash):
 
 def download_zipfile(url, archive_path, unzip_path, md5_hash):
     if not os.path.exists(archive_path):
-        urllib.request.urlretrieve(url, archive_path)
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                print("Downloading {} (attempt {}/{})".format(
+                      url, attempt, max_retries))
+                urllib.request.urlretrieve(url, archive_path)
+                break
+            except Exception as e:
+                print("urlretrieve failed: {}".format(e))
+                if os.path.exists(archive_path):
+                    os.remove(archive_path)
+                if attempt < max_retries:
+                    import time
+                    time.sleep(3 * attempt)
+                else:
+                    # Last resort: try curl -L
+                    print("Falling back to curl...")
+                    ret = subprocess.call(
+                        ["curl", "-L", "-o", archive_path, url])
+                    if ret != 0 or not os.path.exists(archive_path):
+                        print("Download failed for {}".format(url))
+                        sys.exit(1)
     # check_md5_hash(archive_path, md5_hash)
     with zipfile.ZipFile(archive_path, "r") as fid:
         fid.extractall(unzip_path)
@@ -300,8 +321,8 @@ def build_glew(args):
     if os.path.exists(path):
         return
 
-    url = "https://kent.dl.sourceforge.net/project/glew/" \
-          "glew/2.1.0/glew-2.1.0.zip"
+    url = "https://sourceforge.net/projects/glew/files/" \
+          "glew/2.1.0/glew-2.1.0.zip/download"
     archive_path = os.path.join(args.download_path, "glew-2.1.0.zip")
     download_zipfile(url, archive_path, args.build_path,
                      "dff2939fd404d054c1036cc0409d19f1")
